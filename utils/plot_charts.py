@@ -5,15 +5,18 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 from PIL import Image
+import contextlib
 
 from typing import List
 import random
 import pathlib
+import glob
 
 import torch
 import torchvision
 
 from torchmetrics import ConfusionMatrix
+from torchvision.utils import make_grid
 
 
 def plot_random_image(target_dir: str,
@@ -200,3 +203,86 @@ def plot_loss_curves_comparison(*args) -> None:
         ax[i].grid()
         
         i += 1
+        
+        
+def plot_loss(loss_dis: list, loss_gen: list) -> None:
+    font_s = 12
+    plt.figure(figsize=(8,5))
+    
+    plt.title('Значения функции потерь на \nдискриминаторе и генераторе\n', fontsize=font_s+4)
+    
+    plt.plot(loss_gen, label='Generator', alpha=0.7)
+    plt.plot(loss_dis, label='Discriminator', alpha=0.7)
+    
+    plt.xlabel('epochs', fontsize=font_s)
+    plt.ylabel('loss', fontsize=font_s)
+    
+    plt.legend(loc='upper right')
+    
+    plt.grid()
+    plt.show()
+    
+    
+def save_image(epoch: int, 
+               title: str,
+               images: torch.Tensor, 
+               n_col: int,
+               path: str = 'visualization/') -> None:
+    
+    font_s = 12
+    
+    # PyTorch default shape is [C, H, W] but Matplotlib is [H, W, C]
+    image_grid = images.permute(1, 2, 0)
+
+    plt.figure(figsize=(8,8), facecolor='white')
+    plt.imshow(image_grid)
+    plt.title(f'Epoch {epoch}', fontsize=font_s+8)
+    
+    plt.xticks([])
+    plt.yticks([])
+    
+    plt.savefig(f'{path}images/{title}_{epoch:05d}.jpg')
+    plt.close()
+    
+    
+def create_gif(title: str, path: str = 'visualization/') -> None:
+    
+    images_path = f'{path}images/{title}_*.jpg'
+    gif_path = f'{path}gifs/{title}.gif'
+
+    with contextlib.ExitStack() as stack:
+        images_stack = (stack.enter_context(Image.open(image))
+                        for image in sorted(glob.glob(images_path)))
+
+        image = next(images_stack)
+
+        image.save(fp=gif_path, 
+                   format='GIF', 
+                   append_images=images_stack,
+                   save_all=True, 
+                   duration=250, 
+                   disposal=2,
+                   loop=0)
+        
+        
+def plot_comparison_real_fake(dataloader: torch.utils.data.dataloader.DataLoader,
+                              fake_images: list,
+                              device: str) -> None:
+    
+    font_s=12
+    
+    real_batch = next(iter(dataloader))
+
+    plt.figure(figsize=(16,15))
+    plt.subplot(1,2,1)
+    plt.axis('off')
+    plt.title('Real Images\n', fontsize=font_s+4)
+    plt.imshow(np.transpose(
+        make_grid(real_batch[0].to(device), 4, padding=2, normalize=True).cpu(),(1,2,0))
+    )
+
+    plt.subplot(1,2,2)
+    plt.axis('off')
+    plt.title('Fake Images\n', fontsize=font_s+4)
+    plt.imshow(np.transpose(fake_images[-1],(1,2,0)))
+    plt.show()
