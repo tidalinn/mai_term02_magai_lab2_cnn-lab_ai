@@ -18,6 +18,11 @@ import torchvision
 from torchmetrics import ConfusionMatrix
 from torchvision.utils import make_grid
 
+from mlxtend.plotting import plot_confusion_matrix
+from torchmetrics import ConfusionMatrix
+
+from utils.useful_funcs import predict_test
+
 
 def plot_random_image(target_dir: str,
                       seed: int = None,
@@ -286,3 +291,69 @@ def plot_comparison_real_fake(dataloader: torch.utils.data.dataloader.DataLoader
     plt.title('Fake Images\n', fontsize=font_s+4)
     plt.imshow(np.transpose(fake_images[-1],(1,2,0)))
     plt.show()
+    
+    
+def display_confusion_matrix(predictions: List[int],
+                             data: torch.utils.data.dataloader.DataLoader,
+                             class_names: List[str]) -> None:
+    
+    confmat = ConfusionMatrix(num_classes=len(data.classes), task='multiclass')
+    confmat_tensor = confmat(
+        preds=torch.IntTensor(predictions), 
+        target=torch.IntTensor(data.targets)
+    )
+    
+    fig, ax = plot_confusion_matrix(
+        conf_mat=confmat_tensor.numpy(),
+        class_names=class_names,
+        figsize=(10,10)
+    )
+    
+    
+def plot_image_predictions(model: torch.nn.Module, 
+                           device: torch.device,
+                           target_dir: str,
+                           class_names: List[str] = None, 
+                           transform: torchvision.transforms.transforms.Compose = None,
+                           n_images: int = 6,
+                           depth: str = '*/*') -> None:
+    
+    font_s = 12
+    cols = 8
+    
+    if n_images % cols != 0:
+        if n_images < cols:
+            n_images = cols
+        else:
+            n_images = (n_images // cols) * cols 
+            
+        print(f'Для корректной взуализации значение n_images было установлено как кратное {cols}')
+        
+    image_paths = list(pathlib.Path(target_dir).glob(f'{depth}.jpg'))
+    images = random.sample(image_paths, n_images)
+    
+    true_labels = [img.parent.stem for img in images]
+    
+    fig = plt.figure(figsize=(16, n_images / 2))
+        
+    cols = 8
+    rows = n_images // cols + int((n_images % cols) / 10)
+    
+    if rows == 0:
+        rows = 1
+    
+    for i, image in enumerate(images):
+        fig.add_subplot(rows, cols, i+1)
+        
+        img, probs, label = predict_test(image, model, device, transform)
+        
+        # PyTorch default shape is [C, H, W] but Matplotlib is [H, W, C]
+        img_permute = img.squeeze().permute(1, 2, 0)
+        
+        plt.imshow(img_permute)
+        plt.axis('off')
+        
+        plt.title(f'Прогноз: {class_names[label.cpu()]} \nКласс: {true_labels[i]} \n\nВероятность: {probs.max().cpu():.3f}', 
+                  fontsize=font_s-2)
+        
+        plt.tight_layout()

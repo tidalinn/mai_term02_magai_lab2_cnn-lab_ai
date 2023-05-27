@@ -4,7 +4,9 @@
 import pandas as pd
 
 import torch
+import torchvision
 import os
+
 from typing import Tuple
 
 from sklearn.metrics import classification_report
@@ -66,3 +68,42 @@ def get_classification_report(targets: list,
             target_names=class_names,
             output_dict=True
         )).T.sort_values(by=['precision', 'recall', 'f1-score'], ascending=False)
+
+
+def predict_test(image: str,
+                 model: torch.nn.Module,
+                 device: torch.device,
+                 transform: torchvision.transforms.transforms.Compose = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    
+    # preprocess image
+    image = torchvision.io.read_image(str(image)).type(torch.float32)
+    image = image / 255. 
+    
+    if transform:
+        image = transform(image)
+
+    # update model
+    model.to(device)
+    model.eval()
+    
+    # train
+    with torch.inference_mode():
+        image = image.unsqueeze(dim=0)
+        image_pred = model(image.to(device))
+    
+    # predictions
+    image_pred_probs = torch.softmax(image_pred, dim=1)
+    image_pred_label = torch.argmax(image_pred_probs, dim=1)
+    
+    return image, image_pred_probs, image_pred_label
+
+
+def filter_df(df: pd.DataFrame,
+              value: str) -> pd.DataFrame:
+    
+    return pd.DataFrame(
+        df.reset_index()[
+            df.reset_index()['index'].str.contains(value)
+        ].sum(),
+        columns=[f'{value}s']
+    ).drop('index', axis=0)
